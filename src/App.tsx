@@ -234,15 +234,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="mt-auto p-4 border-t border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-emerald-400 border border-white/10" />
-            <div>
-              <p className="text-xs font-medium text-white">Alex Rivera</p>
-              <p className="text-[10px] text-gray-500">Product Designer</p>
-            </div>
-          </div>
-        </div>
+
       </aside>
 
       {/* Main Content Area */}
