@@ -1,20 +1,31 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 🚀 TaskFlow
 
-# Run and deploy your AI Studio app
+TaskFlow is a full-stack task management web application that helps users organize, track, and manage daily work efficiently. It demonstrates core concepts like CRUD operations, database integration, and a clean, intuitive user interface.
 
-This contains everything you need to run your app locally.
+---
 
-View your app in AI Studio: https://ai.studio/apps/5f507d5f-c390-41bd-bd20-7f7bbe8a598c
+## ✨ Features
 
-## Run Locally
+- ➕ Create, update, and delete tasks  
+- 📌 Mark tasks as completed or pending  
+- 🗂️ Organized task workflow  
+- 💾 Persistent data storage  
+- 📱 Responsive and clean UI  
 
-**Prerequisites:**  Node.js
+---
 
+## 🛠️ Tech Stack
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+**Frontend:**
+- React.js (or mention your framework)
+
+**Backend:**
+- Node.js  
+- Express.js  
+
+**Database:**
+- MongoDB (or your DB)
+
+---
+
+## 📂 Project Structure
