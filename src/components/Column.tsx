@@ -11,12 +11,23 @@ interface Props {
   key?: React.Key;
   column: ColumnType;
   tasks: TaskType[];
-  addTask: () => Promise<void> | void;
+  addTask: (content: string) => Promise<void> | void;
   deleteTask: (id: string) => Promise<void> | void;
   isOverlay?: boolean;
 }
 
 export default function Column({ column, tasks, addTask, deleteTask }: Props) {
+  const [isAddingTask, setIsAddingTask] = React.useState(false);
+  const [newTaskContent, setNewTaskContent] = React.useState("");
+
+  const handleAddTask = () => {
+    if (newTaskContent.trim()) {
+      addTask(newTaskContent.trim());
+      setNewTaskContent("");
+      setIsAddingTask(false);
+    }
+  };
+
   const {
     setNodeRef,
     attributes,
@@ -79,16 +90,51 @@ export default function Column({ column, tasks, addTask, deleteTask }: Props) {
             <TaskCard key={task.id} task={task} deleteTask={deleteTask} />
           ))}
         </SortableContext>
+
+        {isAddingTask && (
+          <div className="bg-brand-surface border border-emerald-500/30 p-3 rounded-xl shadow-xl space-y-2">
+            <textarea
+              autoFocus
+              placeholder="What needs to be done?"
+              className="w-full bg-transparent text-sm text-white placeholder-gray-500 outline-none resize-none min-h-[60px]"
+              value={newTaskContent}
+              onChange={(e) => setNewTaskContent(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleAddTask();
+                }
+                if (e.key === "Escape") setIsAddingTask(false);
+              }}
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button 
+                onClick={() => setIsAddingTask(false)}
+                className="px-2 py-1 text-[10px] uppercase font-bold text-gray-500 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleAddTask}
+                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] uppercase font-bold rounded-lg transition-all"
+              >
+                Add Task
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Footer / Add Action */}
-      <button
-        onClick={addTask}
-        className="w-full flex items-center justify-center gap-2 p-3 text-gray-500 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl transition-all text-xs font-medium"
-      >
-        <Plus size={14} />
-        <span>Add New Task</span>
-      </button>
+      {!isAddingTask && (
+        <button
+          onClick={() => setIsAddingTask(true)}
+          className="w-full flex items-center justify-center gap-2 p-3 text-gray-500 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl transition-all text-xs font-medium"
+        >
+          <Plus size={14} />
+          <span>Add New Task</span>
+        </button>
+      )}
     </div>
   );
 }

@@ -68,11 +68,13 @@ async function startServer() {
   app.post("/api/columns", (req, res) => {
     const { title } = req.body;
     const id = uuidv4();
-    const position = (db.prepare("SELECT MAX(position) as maxPos FROM columns").get() as any).maxPos + 1 || 0;
     try {
+      const row = db.prepare("SELECT MAX(position) as maxPos FROM columns").get() as { maxPos: number | null };
+      const position = (row?.maxPos ?? -1) + 1;
       db.prepare("INSERT INTO columns (id, title, position) VALUES (?, ?, ?)").run(id, title, position);
       res.json({ id, title, position });
     } catch (error) {
+      console.error("Error creating column:", error);
       res.status(500).json({ error: (error as Error).message });
     }
   });
@@ -80,11 +82,13 @@ async function startServer() {
   app.post("/api/tasks", (req, res) => {
     const { columnId, content } = req.body;
     const id = uuidv4();
-    const position = (db.prepare("SELECT MAX(position) as maxPos FROM tasks WHERE column_id = ?").get(columnId) as any).maxPos + 1 || 0;
     try {
+      const row = db.prepare("SELECT MAX(position) as maxPos FROM tasks WHERE column_id = ?").get(columnId) as { maxPos: number | null };
+      const position = (row?.maxPos ?? -1) + 1;
       db.prepare("INSERT INTO tasks (id, column_id, content, position) VALUES (?, ?, ?, ?)").run(id, columnId, content, position);
       res.json({ id, column_id: columnId, content, position });
     } catch (error) {
+      console.error("Error creating task:", error);
       res.status(500).json({ error: (error as Error).message });
     }
   });

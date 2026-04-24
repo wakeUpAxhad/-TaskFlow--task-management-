@@ -141,40 +141,61 @@ export default function App() {
     setActiveTask(null);
   };
 
-  const addTask = async (columnId: string) => {
-    const content = prompt("Enter task content:");
-    if (!content) return;
-
-    const res = await fetch("/api/tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ columnId, content }),
-    });
-    const newTask = await res.json();
-    setTasks([...tasks, newTask]);
+  const addTask = async (columnId: string, content: string) => {
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ columnId, content }),
+      });
+      if (!res.ok) throw new Error("Failed to add task");
+      const newTask = await res.json();
+      setTasks([...tasks, newTask]);
+    } catch (err) {
+      console.error("Add task error:", err);
+      alert("Failed to add task. Please check server logs.");
+    }
   };
 
   const deleteTask = async (id: string) => {
-    await fetch(`/api/tasks/${id}`, { method: "DELETE" });
-    setTasks(tasks.filter((t) => t.id !== id));
+    try {
+      const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete task");
+      setTasks(tasks.filter((t) => t.id !== id));
+    } catch (err) {
+      console.error("Delete task error:", err);
+    }
   };
 
-  const addColumn = async () => {
-    const title = prompt("Enter column title:");
-    if (!title) return;
+  const addColumn = async (title: string) => {
+    try {
+      const res = await fetch("/api/columns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      if (!res.ok) throw new Error("Failed to add column");
+      const newCol = await res.json();
+      setColumns([...columns, newCol]);
+    } catch (err) {
+      console.error("Add column error:", err);
+    }
+  };
 
-    const res = await fetch("/api/columns", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
-    const newCol = await res.json();
-    setColumns([...columns, newCol]);
+  const [isAddingColumn, setIsAddingColumn] = useState(false);
+  const [newColumnTitle, setNewColumnTitle] = useState("");
+
+  const handleAddColumn = () => {
+    if (newColumnTitle.trim()) {
+      addColumn(newColumnTitle.trim());
+      setNewColumnTitle("");
+      setIsAddingColumn(false);
+    }
   };
 
   return (
     <div className="flex h-screen bg-brand-bg text-gray-300 font-sans overflow-hidden select-none">
-      {/* Sidebar */}
+      {/* Sidebar - No changes needed here */}
       <aside className="w-64 bg-brand-sidebar border-r border-white/5 flex flex-col shrink-0">
         <div className="p-6 flex items-center gap-3">
           <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
@@ -241,13 +262,43 @@ export default function App() {
               />
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-500" />
             </div>
-            <button 
-              onClick={addColumn}
-              className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-emerald-900/20 transition-all flex items-center gap-2"
-            >
-              <Plus size={16} />
-              New Column
-            </button>
+            
+            {isAddingColumn ? (
+              <div className="flex items-center gap-2">
+                <input 
+                  autoFocus
+                  type="text"
+                  placeholder="Column title..."
+                  className="bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-sm text-white focus:outline-none focus:border-emerald-500/50 transition-all w-48"
+                  value={newColumnTitle}
+                  onChange={(e) => setNewColumnTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddColumn();
+                    if (e.key === "Escape") setIsAddingColumn(false);
+                  }}
+                />
+                <button 
+                  onClick={handleAddColumn}
+                  className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-all"
+                >
+                  <Plus size={16} />
+                </button>
+                <button 
+                  onClick={() => setIsAddingColumn(false)}
+                  className="p-1.5 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-all"
+                >
+                  <span className="text-xs px-1 font-bold">X</span>
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={() => setIsAddingColumn(true)}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-emerald-900/20 transition-all flex items-center gap-2"
+              >
+                <Plus size={16} />
+                New Column
+              </button>
+            )}
           </div>
         </header>
 
@@ -267,7 +318,7 @@ export default function App() {
                     key={column.id}
                     column={column}
                     tasks={tasks.filter((t) => t.column_id === column.id)}
-                    addTask={() => addTask(column.id)}
+                    addTask={(content: string) => addTask(column.id, content)}
                     deleteTask={deleteTask}
                   />
                 ))}
@@ -275,7 +326,7 @@ export default function App() {
               
               {/* Add Column Placeholder */}
               <button 
-                onClick={addColumn}
+                onClick={() => setIsAddingColumn(true)}
                 className="w-80 h-[100px] border-2 border-dashed border-white/5 rounded-2xl flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors shrink-0 group"
               >
                 <div className="text-center">
