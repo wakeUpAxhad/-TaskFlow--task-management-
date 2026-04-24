@@ -1,0 +1,6 @@
+{
+  "name": "TaskFlow",
+  "description": "A full-stack task management application with a Trello-inspired interface, supporting real-time CRUD operations and persistent data storage.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
