@@ -18,15 +18,73 @@ import {
   sortableKeyboardCoordinates,
   horizontalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Column as ColumnType, Task as TaskType, BoardData } from "./types";
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  writeBatch,
+  serverTimestamp,
+  orderBy,
+} from "firebase/firestore";
+import { onAuthStateChanged, User, signOut } from "firebase/auth";
+import { db, auth, googleProvider, signInWithPopup, handleFirestoreError, OperationType } from "./lib/firebase";
+import { Column as ColumnType, Task as TaskType } from "./types";
 import Column from "./components/Column";
 import TaskCard from "./components/TaskCard";
-import { Layout, Plus, List, Calendar, Clock, Search } from "lucide-react";
+import { Layout, Plus, List, Calendar, Clock, Search, LogIn, LogOut } from "lucide-react";
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
   const [columns, setColumns] = useState<ColumnType[]>([]);
   const [tasks, setTasks] = useState<TaskType[]>([]);
   const [activeTask, setActiveTask] = useState<TaskType | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setColumns([]);
+      setTasks([]);
+      return;
+    }
+
+    const qCols = query(
+      collection(db, "columns"),
+      where("ownerId", "==", user.uid),
+      orderBy("position", "asc")
+    );
+    const unsubscribeCols = onSnapshot(qCols, (snapshot) => {
+      const cols = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as ColumnType));
+      setColumns(cols);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, "columns"));
+
+    const qTasks = query(
+      collection(db, "tasks"),
+      where("ownerId", "==", user.uid),
+      orderBy("position", "asc")
+    );
+    const unsubscribeTasks = onSnapshot(qTasks, (snapshot) => {
+      const t = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as TaskType));
+      setTasks(t);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, "tasks"));
+
+    return () => {
+      unsubscribeCols();
+      unsubscribeTasks();
+    };
+  }, [user]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -107,17 +165,21 @@ export default function App() {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    if (!over) return;
+    if (!over || !user) return;
 
-    const activeId = active.id;
-    const overId = over.id;
+    const activeId = active.id as string;
+    const overId = over.id as string;
 
     if (active.data.current?.type === "Column") {
-      setColumns((columns) => {
-        const activeIndex = columns.findIndex((col) => col.id === activeId);
-        const overIndex = columns.findIndex((col) => col.id === overId);
-        return arrayMove(columns, activeIndex, overIndex);
+      const activeIndex = columns.findIndex((col) => col.id === activeId);
+      const overIndex = columns.findIndex((col) => col.id === overId);
+      const newColumns = arrayMove(columns, activeIndex, overIndex);
+      
+      const batch = writeBatch(db);
+      newColumns.forEach((col, idx) => {
+        batch.update(doc(db, "columns", col.id), { position: idx });
       });
+      await batch.commit().catch(e => handleFirestoreError(e, OperationType.UPDATE, "columns"));
     }
 
     const isActiveATask = active.data.current?.type === "Task";
@@ -125,16 +187,15 @@ export default function App() {
       const task = tasks.find((t) => t.id === activeId);
       if (task) {
         const colTasks = tasks.filter((t) => t.column_id === task.column_id);
-        const pos = colTasks.findIndex((t) => t.id === activeId);
-        
-        await fetch(`/api/tasks/${activeId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            columnId: task.column_id,
-            position: pos,
-          }),
+        const batch = writeBatch(db);
+        colTasks.forEach((t, idx) => {
+          batch.update(doc(db, "tasks", t.id), { 
+            position: idx,
+            columnId: task.column_id, // Ensure consistent field naming if changed
+            updatedAt: serverTimestamp() 
+          });
         });
+        await batch.commit().catch(e => handleFirestoreError(e, OperationType.UPDATE, "tasks"));
       }
     }
 
@@ -142,43 +203,59 @@ export default function App() {
   };
 
   const addTask = async (columnId: string, content: string) => {
+    if (!user) return;
     try {
-      const res = await fetch("/api/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ columnId, content }),
+      const colTasks = tasks.filter(t => t.column_id === columnId);
+      const position = colTasks.length;
+      await addDoc(collection(db, "tasks"), {
+        content,
+        columnId,
+        position,
+        ownerId: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
-      if (!res.ok) throw new Error("Failed to add task");
-      const newTask = await res.json();
-      setTasks([...tasks, newTask]);
     } catch (err) {
-      console.error("Add task error:", err);
-      alert("Failed to add task. Please check server logs.");
+      handleFirestoreError(err, OperationType.CREATE, "tasks");
     }
   };
 
   const deleteTask = async (id: string) => {
+    if (!user) return;
     try {
-      const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete task");
-      setTasks(tasks.filter((t) => t.id !== id));
+      await deleteDoc(doc(db, "tasks", id));
     } catch (err) {
-      console.error("Delete task error:", err);
+      handleFirestoreError(err, OperationType.DELETE, `tasks/${id}`);
     }
   };
 
   const addColumn = async (title: string) => {
+    if (!user) return;
     try {
-      const res = await fetch("/api/columns", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title }),
+      const position = columns.length;
+      await addDoc(collection(db, "columns"), {
+        title,
+        position,
+        ownerId: user.uid,
       });
-      if (!res.ok) throw new Error("Failed to add column");
-      const newCol = await res.json();
-      setColumns([...columns, newCol]);
     } catch (err) {
-      console.error("Add column error:", err);
+      handleFirestoreError(err, OperationType.CREATE, "columns");
+    }
+  };
+
+  const handleSignIn = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      console.error("Sign in error:", err);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("Sign out error:", err);
     }
   };
 
@@ -192,6 +269,35 @@ export default function App() {
       setIsAddingColumn(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-brand-bg text-white">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-brand-bg text-white px-8">
+        <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center mb-6 shadow-2xl shadow-emerald-500/20">
+          <Layout size={32} className="text-black" />
+        </div>
+        <h1 className="text-4xl font-bold mb-4 tracking-tight">TaskFlow</h1>
+        <p className="text-gray-400 mb-8 text-center max-w-md leading-relaxed">
+          The elegant way to manage your projects. Organize tasks, collaborate with your team, and track progress effortlessly.
+        </p>
+        <button
+          onClick={handleSignIn}
+          className="flex items-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold transition-all shadow-xl shadow-emerald-900/20 active:scale-95"
+        >
+          <LogIn size={20} />
+          Sign in with Google
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-brand-bg text-gray-300 font-sans overflow-hidden select-none">
@@ -225,16 +331,31 @@ export default function App() {
             <div className="flex items-center gap-3 px-3 py-2 text-sm text-gray-400 hover:text-white cursor-pointer hover:bg-white/5 rounded-lg transition-all">
               <span className="w-2 h-2 rounded-full bg-blue-500"></span> TaskFlow App
             </div>
-            <div className="flex items-center gap-3 px-3 py-2 text-sm text-gray-400 hover:text-white cursor-pointer hover:bg-white/5 rounded-lg transition-all">
-              <span className="w-2 h-2 rounded-full bg-purple-500"></span> Backend API
-            </div>
-            <div className="flex items-center gap-3 px-3 py-2 text-sm text-gray-400 hover:text-white cursor-pointer hover:bg-white/5 rounded-lg transition-all">
-              <span className="w-2 h-2 rounded-full bg-orange-500"></span> Marketing Site
-            </div>
           </div>
         </div>
 
-
+        <div className="mt-auto p-4 border-t border-white/5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              {user.photoURL ? (
+                <img src={user.photoURL} alt={user.displayName || ""} className="w-8 h-8 rounded-full border border-white/10" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-emerald-400 border border-white/10" />
+              )}
+              <div>
+                <p className="text-xs font-medium text-white truncate max-w-[100px]">{user.displayName || "User"}</p>
+                <p className="text-[10px] text-gray-500">Member</p>
+              </div>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="p-1.5 hover:bg-white/5 text-gray-500 hover:text-red-400 rounded-lg transition-colors"
+              title="Sign Out"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
+        </div>
       </aside>
 
       {/* Main Content Area */}

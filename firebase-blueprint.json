@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "column": {
+      "title": "Column",
+      "description": "Represents a column in the task board",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The title of the column"
+        },
+        "position": {
+          "type": "integer",
+          "description": "The display position of the column"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "The UID of the user who owns this board/column"
+        }
+      },
+      "required": ["title", "position", "ownerId"]
+    },
+    "task": {
+      "title": "Task",
+      "description": "Represents a task within a column",
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "The content of the task"
+        },
+        "position": {
+          "type": "integer",
+          "description": "The display position of the task within the column"
+        },
+        "columnId": {
+          "type": "string",
+          "description": "The ID of the column this task belongs to"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "The UID of the user who owns this task"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Initial creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["content", "position", "columnId", "ownerId"]
+    }
+  },
+  "firestore": {
+    "columns/{columnId}": {
+      "schema": "column",
+      "description": "List of board columns"
+    },
+    "tasks/{taskId}": {
+      "schema": "task",
+      "description": "List of tasks"
+    }
+  }
+}
